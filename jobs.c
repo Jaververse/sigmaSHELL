@@ -5,6 +5,7 @@
 
 
 
+//builtin que recorre e imprime la tabla de jobs 
 void builtin(JobTable *table){
 
     if(table == NULL) return;
@@ -18,11 +19,11 @@ void builtin(JobTable *table){
             else if (currentJob->state == SUSPENDED) currentState = "Suspended";
 
             else if (currentJob->state == DONE){
-                if(!currentJob->showedJob) currentJob->showedJob = 1;
+                if(!currentJob->showedJob) currentJob->showedJob = 1; 
                 currentState = "Done";
             } 
 
-            printf("[%d] %s\t\t%s\n", currentJob->job_id, currentState, currentJob->command);
+            printf("[%d] %s\t\t%s\n", currentJob->job_id, currentState, currentJob->command); 
             currentJob = currentJob->next;
         }
         return;
@@ -30,7 +31,7 @@ void builtin(JobTable *table){
 }
 
 
-//Para el built in con -p
+//Para el built in con -p, imprime solo los PID de los procesos
 void builtinPID(JobTable *table){
     if(table == NULL) return;
 
@@ -53,6 +54,7 @@ void init_JobTable(JobTable *table){
 }
 
 
+//aniadir un job a la tabla
 int add_job(JobTable *table, pid_t pid, const char *cmd, JobState state){
 
     if(table == NULL) return -1;
@@ -60,6 +62,7 @@ int add_job(JobTable *table, pid_t pid, const char *cmd, JobState state){
     Job *newJob = (Job*)malloc(sizeof(Job));
     if(newJob == NULL) return -1;
 
+    //inicializacion del nuevo job
     strncpy(newJob->command,cmd, MAX_CHAR_IN_LINE - 1); //copia tmb el \n
     newJob->command[MAX_CHAR_IN_LINE - 1] = '\0'; //obtenemos el valor nulo.
     newJob->pgid = pid;
@@ -68,10 +71,11 @@ int add_job(JobTable *table, pid_t pid, const char *cmd, JobState state){
     newJob->job_id = table->next_id++;
     newJob->showedJob = 0;
 
+    //primer job registrado
      if(table->head == NULL){
         table->head = newJob;
      }
-     else{
+     else{ //job numero n registrado
         Job *current = table->head;
             while(current->next != NULL)
             {
@@ -85,7 +89,7 @@ int add_job(JobTable *table, pid_t pid, const char *cmd, JobState state){
     
 }
 
-//Para cuando se haga kill
+//Para cuando se haga kill a un proceso 
 int delete_job(JobTable *table, pid_t pgid){
     if(table == NULL || table->head ==NULL) return -1;
 
@@ -99,6 +103,7 @@ int delete_job(JobTable *table, pid_t pgid){
 
     if(current == NULL) return -1;
 
+    //cuando se va a eliminar el head
     if(prev == NULL){
         table->head = current->next;
     }
@@ -170,6 +175,7 @@ void delete_DONE_and_Print(JobTable *tabla){
 }
 
 
+//para evitar memory leaks y eliminar toda la tabla al finalizar
 void clear_JobTable(JobTable *table){
     if (table == NULL) return;
     Job *current = table->head;

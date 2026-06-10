@@ -1,4 +1,7 @@
-sigmaShell
 *.o
 *.out
 .vscode/
+ucvsh
+.ucvsh_history
+.ucvsh_index
+build/

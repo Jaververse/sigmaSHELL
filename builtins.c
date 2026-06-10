@@ -65,10 +65,12 @@ static int builtin_exit(void) {
     
     while (waitpid(-1, NULL, WNOHANG) > 0); // elimina los zombies, sin pausar o esperar el proceso principal.
 
+    save_index_to_file(&g_history);
     save_history_to_file(&g_history); // Utilizamos la funcion en history.c para guardar el historial en un archivo.
 
     clear_history(&g_history); // Limpiamos el historial en memoria. (funcion en history.c)
     clear_JobTable(&g_job_table); // limpiamos el job table en memoria. (funcion en jobs.c)
+    
 
     exit(0); // Salimos
     return 0;

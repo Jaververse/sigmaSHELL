@@ -14,20 +14,20 @@ typedef enum{
 } JobState;
 
 typedef struct JobNode{
-    pid_t pgid; //representa el pid de grupo = pid de proceso lider
-    char command[MAX_CHAR_IN_LINE];
-    JobState state;
-    int job_id;
-    int showedJob; //Para trackear la aparicion de los estados en JOBS al hacer el builtin
-    struct JobNode *next;
+    pid_t pgid; //pid del proceso 
+    char command[MAX_CHAR_IN_LINE]; //comando que genero el proceso
+    JobState state; //estado
+    int job_id; //id para trackear la correcta enumracion en la tabla de jobs, si es 1 ya se puede borrar, si es 0 todavia no se ha mostrado
+    int showedJob; //Para trackear la aparicion de los estados DONE en JOBS al hacer el builtin
+    struct JobNode *next;   
     
 } Job; 
 
 typedef struct{
 
     Job *head;
-    int next_id;
-    int total_jobs;
+    int next_id;    //Proximo id a asignarle al proximo job
+    int total_jobs; 
 
 }JobTable;
 
