@@ -1,166 +1,63 @@
-/*
-  main.c punto de entrada y bucle REPL
- implementa el núcleo del shell: el ciclo REPL
-    1. Inicializar todos los módulos del shell.
-    2. Ejecutar el bucle principal: leer línea, parsear, ejecutar.
-    3. Gestionar el teardown limpio al salir.
- */
 
-#include "main.h"  
+#include "parser.h"   
 #include "executor.h"  
+#include "jobs.h"   
+#include "history.h" 
 
-
-#ifdef HAVE_PARSER_H
-#  include "parser.h"    /* parser_parse_line(), parser_free_pipeline()       */
-#endif
-
-#ifdef HAVE_BUILTINS_H
-#  include "builtins.h"  /* builtins_init()                                   */
-#endif
-
-#ifdef HAVE_JOBS_H
-#  include "jobs.h"      /* jobs_init(), jobs_cleanup()                       */
-#endif
-
-#ifdef HAVE_HISTORY_H
-#  include "history.h"   /* history_init(), history_add(), history_cleanup()  */
-#endif
+#include "input.h"
+#include "builtins.h" 
 
 #include <stdio.h> 
-#include <stdlib.h>   
-#include <string.h>    
-#include <stdbool.h>    
-#include <unistd.h>      
-
-/*
- shell_last_exit_code:
- codigo de salida del último comando. Inicia en 0 (éxito).
- el integrante 2 lo leerá para implementar && y ||.
- */
-int  shell_last_exit_code = 0;
-
-/*
- shell_running:
-  el built-in "exit" lo pondrá en false para salir del bucle principal.
- */
-bool shell_running = true;
+#include <stdlib.h>
+#include <string.h>  
+#include <unistd.h>   
 
 
-/*
- shell_print_prompt()
-  Imprime el prompt en stdout y fuerza el vaciado del buffer.
-  fflush(stdout) es necesario porque stdout es line-buffered por defecto
-  cuando está conectado a una terminal. Sin fflush, el prompt podría no
-  aparecer antes de que el programa quede bloqueado esperando input.
- */
-void shell_print_prompt(void)
-{
-    printf("%s", SHELL_PROMPT);
-    fflush(stdout);
-}
+JobTable         g_job_table;  // tabla de trabajos en background
+HistoryPersistent g_history;   // historial persistente de comandos
 
-/* 
- read_line()
-  Lee una línea de stdin y la almacena en el buffer proporcionado.
-    usa fgets() que es seguro (respeta el tamaño del buffer).
-    elimina el '\n' final que fgets incluye.
-    si el usuario presiona Ctrl-D (EOF), retorna false para indicar
-    que el shell debe terminar limpiamente.
- 
-  Parámetros:
-    buffer: Buffer donde se almacena la línea leída.
-    buf_size: Tamaño del buffer en bytes.
- 
-  Retorna:
-    true  si se leyó una línea correctamente.
-    false si se alcanzó EOF (Ctrl-D) o hubo un error de lectura.
- */
-static bool read_line(char *buffer, size_t buf_size)
-{
-    if (fgets(buffer, (int)buf_size, stdin) == NULL) {
-        /* EOF o error de lectura */
-        if (feof(stdin)) {
-            /* Ctrl-D: salida limpia */
-            printf("\n"); /* Salto de línea estético antes de salir */
-        } else {
-            perror("[main] fgets");
-        }
-        return false;
-    }
-
-    /* Eliminar el '\n' final que fgets deja en el buffer.
-      strcspn() retorna la posición del primer '\n' o '\r'.
-      Si no hay '\n' (línea muy larga truncada), no hace nada. */
-    buffer[strcspn(buffer, "\n\r")] = '\0';
-
-    return true;
-}
-
-/* 
-  execute_line()
-  Procesa y ejecuta una línea de entrada del usuario.
-    La línea puede contener múltiples comandos separados por ';', '&&', '||'.
-    El parser devuelve una lista de Pipelines con sus operadores de control.
-    Este función itera sobre ellas, ejecutando cada una según el operador
-    y el código de salida del comando anterior.
- 
-  Parámetros:
-    line — Línea de entrada (ya sin '\n', no vacía).
- */
-static void execute_line(const char *line)
-{
-
-}
 int main(void)
 {
-    /*
-    inicializar los módulos en el orden correcto.
-    history debe cargarse antes del bucle REPL para
-    que las flechas funcionen desde el primer comando.
-     */
 
-    /* inicializar el motor de ejecución (cachea $PATH, instala SIGCHLD) */
-    executor_init();
+//inicializar la tabla de jobs con valores por defecto
+init_JobTable(&g_job_table);
 
-    /* inicializar la tabla de jobs del integrante 3 */
-#ifdef HAVE_JOBS_H
-    jobs_init();
-#endif
+//inicializar la estructura del historial en memoria
+init_history(&g_history);
 
-    /* inicializar el historial del Integrante 3 (carga ~/.ucvsh_history) */
-#ifdef HAVE_HISTORY_H
-    history_init();
-#endif
+//cargar el historial desde ~/.ucvsh_history
+load_history_from_file(&g_history);
 
-    /* inicializar los built-ins del Integrante 2 (si requieren init) */
-#ifdef HAVE_BUILTINS_H
-    builtins_init();
-#endif
+executor_init(&g_job_table);
 
-    /* BUCLE REPL
-      Se ejecuta indefinidamente hasta que:
-        a) El built-in "exit" pone shell_running = false
-        b) El usuario presiona Ctrl-D (EOF en stdin)
-        c) Un error irrecuperable de lectura
-     */
+    while (1) {
 
-    char input_buffer[MAX_INPUT_LEN];
+    char *line = NULL;
 
-    while (shell_running) {
+line = read_line(&g_history);
+if(line == NULL){
+    break;
+}
+//guardar en historial
+add_to_history(&g_history, line);
 
-        /*mostrar prompt y leer entrada del usuario
+//parsear y ejecutar
+NodeComando *lista = Parser(line);
 
-        /*
-         *mostrar el prompt si stdin es una terminal interactiva.
-         * Si ucvsh recibe su input de un pipe o archivo (modo script),
+if (lista != NULL) {
+    executor_run(lista);
+    liberarListaCMD(lista);
+        }
 
-         */
+//read_line() usa malloc internamente: liberar la línea
+free(line);
 
-        /* Registrar en el historial  */
+}
 
-        history_add(input_buffer);
+save_history_to_file(&g_history);
+clear_history(&g_history);
+clear_JobTable(&g_job_table);
+executor_cleanup();
 
-    executor_cleanup();  /* liberar arreglo de directorios de $PATH */
-
-    return shell_last_exit_code; /* el shell retorna el último exit code */
+return 0;
 }
