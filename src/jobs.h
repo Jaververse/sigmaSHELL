@@ -6,7 +6,7 @@
 
 #define MAX_CHAR_IN_LINE 256
 
-
+//estados de un JOB
 typedef enum{
     RUNNING,
     SUSPENDED,
@@ -18,6 +18,7 @@ typedef struct JobNode{
     char command[MAX_CHAR_IN_LINE];
     JobState state;
     int job_id;
+    int showedJob; //Para trackear la aparicion de los estados en JOBS al hacer el builtin
     struct JobNode *next;
     
 } Job; 
@@ -30,7 +31,7 @@ typedef struct{
 
 }JobTable;
 
-//Firma de las funciones principales
+
 
 void init_JobTable(JobTable *table);
 int add_job(JobTable *table, pid_t pid, const char *cmd, JobState state);

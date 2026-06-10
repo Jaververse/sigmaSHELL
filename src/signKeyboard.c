@@ -9,6 +9,7 @@
 
 void handler(int sign){
 
+    //Solo implementa que no se cierre el programa
     if(sign == SIGINT){ //Ctrl+C
         printf("\nucvsh> ");
         fflush(stdout);

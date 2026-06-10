@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 void init_history(HistoryPersistent *historial){
     historial->head = NULL;
     historial->tail = NULL;
@@ -11,6 +12,7 @@ void init_history(HistoryPersistent *historial){
     historial->nextLine = 1;
 }
 
+//buil-int del historial
 void builtin_history(HistoryPersistent *historial){
     if(historial == NULL || historial->head == NULL || historial->memLines == 0) return;
 
@@ -18,14 +20,18 @@ void builtin_history(HistoryPersistent *historial){
 
     while(current != NULL){
 
-        printf("%d  %s", current->pos, current->command);
-        if (current->command[strlen(current->command) - 1] != '\n') {
+        printf("%d  %s", current->pos, current->commandEditable);
+
+        //por si no tiene el salto de linea integrado
+        if (current->commandEditable[strlen(current->commandEditable) - 1] != '\n') {
             printf("\n");
         }
         current = current->next;
     }
 }
 
+
+//aniadir en el historial de memoria
 void add_to_history(HistoryPersistent *historial, const char *command){
 
     if(historial == NULL || command == NULL) return;
@@ -40,10 +46,14 @@ void add_to_history(HistoryPersistent *historial, const char *command){
             return; 
         }
     }
-
+//inicializar los valores del nuevo valor al historial
 HistoryLine *newLine = (HistoryLine*) malloc(sizeof(HistoryLine));
+
 strncpy(newLine->command, command, MAX_CHAR_ON_LINE - 1);
+strncpy(newLine->commandEditable, command, MAX_CHAR_ON_LINE - 1);
+newLine->commandEditable[MAX_CHAR_ON_LINE - 1] = '\0';
 newLine->command[MAX_CHAR_ON_LINE - 1] = '\0';
+
 newLine->next = NULL;
 newLine->previous = NULL;
 newLine->pos = historial->nextLine;
@@ -75,6 +85,8 @@ historial->nextLine++;
 historial->cursor = NULL;
 }
 
+
+
 void clear_history(HistoryPersistent *historial){
 
     HistoryLine *current = historial->head;
@@ -92,6 +104,7 @@ void clear_history(HistoryPersistent *historial){
 
 //persistencia en disco
 
+//cargar al historial de memoria desde el archivo de disco
 void load_history_from_file(HistoryPersistent *historial){
 
     if(historial == NULL) return;
@@ -114,7 +127,7 @@ void load_history_from_file(HistoryPersistent *historial){
 }
 
 
-//guardar al realizar exit
+//guardar al realizar exit el historial de memoria en disco
 void save_history_to_file(const HistoryPersistent *historial){
 
     if(historial == NULL || historial->head == NULL) return;
@@ -139,11 +152,12 @@ void save_history_to_file(const HistoryPersistent *historial){
     fclose(fd);
 }
 
+//Para viajar en el historial a traves de las flechas arriba y abajo
 char* directional_arrows(HistoryPersistent *historial, char direction) {
     if (historial == NULL || historial->head == NULL) {
         return NULL; 
     }
-
+    //la direccion hacia arriba se denota con el char A
     if (direction == 'A') { 
         if (historial->cursor == NULL) {
        
@@ -154,19 +168,20 @@ char* directional_arrows(HistoryPersistent *historial, char direction) {
         }
        
     } 
+    //hacia abajo es con B
     else if (direction == 'B') { 
         if (historial->cursor == NULL) {
            
             return NULL; 
         } 
         
-        // Avanzamos al siguiente nodo (puede convertirse en NULL si pasamos el 'tail')
+      
         historial->cursor = historial->cursor->next; 
     }
 
-    // Retornamos el comando actual si existe, o NULL si volvimos a la línea vacía
+    
     if (historial->cursor != NULL) {
-        return historial->cursor->command;
+        return historial->cursor->commandEditable;
     }
     
     return NULL; 
