@@ -185,6 +185,13 @@ static int builtin_bg(char **args) {
     return 0; // Retornamos sin error, y sin esperar con el waitpid , esto hace que se ejecute en segundo plano.
 }
 
+//Muestro history
+static int builtin_historyR(void) {
+    // LLamo funcion en history.c
+    builtin_history(&g_history);
+    return 0;
+}
+
 
 int is_builtin(const char *comando) {
     if (comando == NULL) {
@@ -206,6 +213,9 @@ int is_builtin(const char *comando) {
     return 1;
     }
     else if (strcmp(comando,"bg") == 0) {
+    return 1;
+    }
+    else if (strcmp(comando,"history") == 0) {
     return 1;
     }
     return 0; //Es un comando externo 
@@ -235,6 +245,10 @@ int run_builtin(NodeComando *comando) {
     if (strcmp(comando->args[0], "bg") == 0) 
     {
     return builtin_bg(comando->args);
+    }
+    if(strcmp(comando->args[0],"history") == 0)
+    {
+    return builtin_historyR();
     }
     //Si no es ninguno , no es un builtin valido.
     return 1;

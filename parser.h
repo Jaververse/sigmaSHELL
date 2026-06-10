@@ -14,6 +14,7 @@ char **args;
 int argc;
 char *input_file;
 char *output_file;
+int output_append;
 int  background;
 OpType next_op;
 struct NodeComando *next;

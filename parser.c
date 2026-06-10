@@ -16,6 +16,7 @@ if (!n) return NULL; //Si no funciona por memoria. (Seguridad)
 n->args = calloc(256, sizeof(char *)); // reservamos espacio para los argumentos.
 n->argc = 0; //Incializamos
 n->next_op = OP_NONE; //Ningun operador del enum
+n->output_append=0;
 return n; //Devolvemos el nodo
 }
 
@@ -61,7 +62,7 @@ static void Lexer(const char *entrada, tokens_c *contenedor) {
     int bufferi = 0; // Indice para iterar con el buffer.
 
     // Tomamos en cuenta los operados dobles.
-    if (i + 1 < longitud && ((entrada[i] == '&' && entrada[i+1] == '&') || (entrada[i] == '|' && entrada[i+1] == '|'))) {
+    if (i + 1 < longitud && ((entrada[i] == '&' && entrada[i+1] == '&') || (entrada[i] == '|' && entrada[i+1] == '|') || (entrada[i] == '>' && entrada[i+1] == '>'))) {
         buffer[bufferi++] = entrada[i++]; // El buffer toma el valor del operador y avanzamos
         buffer[bufferi++] = entrada[i++]; // De la misma manera pero con el segundo caracter.
         buffer[bufferi] = '\0'; // Caracter nulo para terminar.
@@ -135,7 +136,14 @@ NodeComando *Parser(const char *line) {
          curr->next_op = OP_AND;
          curr->next = newnode();
          curr = curr->next;
-        } 
+        }
+        else if (strcmp(token, ">>") == 0) { // Append
+        itok++; // Avanzamos al siguiente , que tiene que ser el nombre del archivo.
+        if (itok < contenedor.cantidad) {
+        curr->output_file = strdup(contenedor.elementos[itok]);
+        curr->output_append = 1; // Tenemos que escribir al final.
+        }
+        }
         else if (strcmp(token, "|") == 0) { // Operador PIPE
         curr->args[curr->argc] = NULL; 
         curr->next_op = OP_PIPE;
@@ -149,6 +157,7 @@ NodeComando *Parser(const char *line) {
         itok++; //Avanzamos siguiente token y tiene que ser el nombre del archivo.
         if (itok < contenedor.cantidad) { // Seguridad
         curr->output_file = strdup(contenedor.elementos[itok]); // Copiamos y guardamos en la salida.
+        curr->output_append = 0; // no es al final.
         }
         } 
         else if (strcmp(token, "<") == 0) { // De manera analoga al anterior pero con entrada.
