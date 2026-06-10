@@ -38,7 +38,7 @@ void builtinPID(JobTable *table){
 
     while (currentJob != NULL)
     {
-       printf("%d", currentJob->pgid);
+       printf("%d\n", currentJob->pgid);
        currentJob = currentJob->next;
     }
     return;
