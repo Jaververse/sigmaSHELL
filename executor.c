@@ -123,18 +123,27 @@ if (strchr(name, '/') != NULL) {
 }
 static int apply_redirections(const NodeComando *cmd)
 {
-//redireccion de entrada: < archivo
-if (cmd->input_file != NULL) {
-    int fd = open(cmd->input_file, O_RDONLY);
-    if (fd == -1) { perror(cmd->input_file); return -1; }
-    if (dup2(fd, STDIN_FILENO) == -1) {
-        perror("dup2 stdin"); close(fd); return -1;
+    /* Redirección de entrada: < archivo */
+    if (cmd->input_file != NULL) {
+        int fd = open(cmd->input_file, O_RDONLY);
+        if (fd == -1) { perror(cmd->input_file); return -1; }
+        if (dup2(fd, STDIN_FILENO) == -1) {
+            perror("dup2 stdin"); close(fd); return -1;
         }
         close(fd);
     }
-//redireccion de salida: > archivo
+
+    /* Redirección de salida: > archivo (siempre trunca, no hay >> en el parser) */
     if (cmd->output_file != NULL) {
-        int fd = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int banderas;
+        
+        // Verificamos una bandera.
+        if (cmd->output_append) {
+            banderas = O_WRONLY | O_CREAT | O_APPEND; // APPEND
+        } else {
+            banderas = O_WRONLY | O_CREAT | O_TRUNC; // O_TRUNC
+        }
+        int fd = open(cmd->output_file, banderas, 0644);
         if (fd == -1) { perror(cmd->output_file); return -1; }
         if (dup2(fd, STDOUT_FILENO) == -1) {
             perror("dup2 stdout"); close(fd); return -1;
