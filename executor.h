@@ -1,24 +1,16 @@
-
 #ifndef EXECUTOR_H
 #define EXECUTOR_H
 
-#include "parser.h" 
-#include "jobs.h"   
+#include "parser.h"  //necesario porque executor_run() recibe una lista de NodeComando creada por el parser.
+#include "jobs.h"    //necesario porque executor_init() recibe la tabla de jobs compartida con la shell.
 
-//longitud maxima de una ruta construida al buscar en $PATH
-#define MAX_BINARY_PATH  768
+#define MAX_BINARY_PATH 768  //longitud maxima usada para construir rutas como /usr/bin/ls sin desbordar buffers.
+#define MAX_PATH_DIRS 64     //cantidad maxima de directorios de PATH que se cachean al inicializar el executor.
 
-//numero maximo de directorios que se leen de $PATH
-#define MAX_PATH_DIRS     64
+void executor_init(JobTable *table);                  // inicializa el modulo executor, cachea PATH y registra SIGCHLD.
+void executor_cleanup(void);                          // libera recursos privados del executor antes de cerrar la shell.
+int executor_find_binary(const char *name, char *out_path); // busca un ejecutable por ruta explicita o dentro de PATH.
+int executor_run(NodeComando *head);                  //ejecuta la lista enlazada de comandos respetando operadores del parser.
 
-void executor_init(JobTable *table);
+#endif // EXECUTOR_H
 
-
-void executor_cleanup(void);
-
-
-int executor_find_binary(const char *name, char *out_path);
-
-int executor_run(NodeComando *head);
-
-#endif

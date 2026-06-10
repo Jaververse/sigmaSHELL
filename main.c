@@ -1,63 +1,55 @@
+#include "parser.h"        //expone NodeComando, Parser() y liberarListaCMD() para convertir una linea en comandos ejecutables
+#include "executor.h"      //expone executor_init(), executor_run() y executor_cleanup() para ejecutar la lista parseada
+#include "jobs.h"          //expone JobTable y funciones de administracion de trabajos en segundo plano
+#include "history.h"       //expone HistoryPersistent y funciones para cargar, guardar y limpiar el historial
+#include "input.h"         //expone read_line(), que lee una linea interactiva usando el historial
+#include "builtins.h"      //se incluye para mantener visible el modulo de built-ins dentro del programa principal
+#include "signKeyboard.h"  //expone init_signals(), dejando la logica de senales fuera de main.c
 
-#include "parser.h"   
-#include "executor.h"  
-#include "jobs.h"   
-#include "history.h" 
+#include <stdio.h>          //biblioteca estandar de entrada/salida usada indirectamente por el flujo principal
+#include <stdlib.h>         //biblioteca estandar para free() y utilidades generales.
 
-#include "input.h"
-#include "builtins.h" 
-
-#include <stdio.h> 
-#include <stdlib.h>
-#include <string.h>  
-#include <unistd.h>   
-
-
-JobTable         g_job_table;  // tabla de trabajos en background
-HistoryPersistent g_history;   // historial persistente de comandos
+JobTable g_job_table;             //tabla global de jobs para que executor.c y builtins.c compartan el mismo estado
+HistoryPersistent g_history;      //historial global para que input.c, history.c y builtins.c trabajen sobre la misma lista
 
 int main(void)
 {
+    init_signals();               //maneja la señal CTRL + C para que no se cierre la shell
 
-//inicializar la tabla de jobs con valores por defecto
-init_JobTable(&g_job_table);
+    init_JobTable(&g_job_table);  //prepara la lista de jobs antes de registrar procesos en background
 
-//inicializar la estructura del historial en memoria
-init_history(&g_history);
+    init_history(&g_history);     //inicializa la estructura enlazada del historial en memoria
 
-//cargar el historial desde ~/.ucvsh_history
-load_history_from_file(&g_history);
+    load_history_from_file(&g_history); //recupera comandos anteriores desde el archivo persistente del historial
 
-executor_init(&g_job_table);
+    executor_init(&g_job_table);  //entrega la tabla de jobs al executor y prepara recursos internos como PATH y SIGCHLD
 
-    while (1) {
+    while (1) {  //ciclo principal de la shell: leer, parsear, ejecutar y liberar en cada iteracion
+        char *line = read_line(&g_history); //lee una linea completa desde el prompt y permite navegar el historial
 
-    char *line = NULL;
-
-line = read_line(&g_history);
-if(line == NULL){
-    break;
-}
-//guardar en historial
-add_to_history(&g_history, line);
-
-//parsear y ejecutar
-NodeComando *lista = Parser(line);
-
-if (lista != NULL) {
-    executor_run(lista);
-    liberarListaCMD(lista);
+        if (line == NULL) {       //si la entrada termina o hay error irrecuperable, se sale limpiamente del ciclo
+            break;
         }
 
-//read_line() usa malloc internamente: liberar la línea
-free(line);
+        add_to_history(&g_history, line); //guarda la linea valida en el historial en memoria para uso posterior
 
-}
+        NodeComando *lista = Parser(line); //convierte la linea en una lista enlazada de comandos y operadores
 
-save_history_to_file(&g_history);
-clear_history(&g_history);
-clear_JobTable(&g_job_table);
-executor_cleanup();
+        if (lista != NULL) {      //solo se ejecuta si el parser produjo al menos un comando valido
+            executor_run(lista);  //ejecuta comandos simples, pipelines, redirecciones, &&, ||, ; y background simple
+            liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
+        }
 
-return 0;
+        free(line); // libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
+    }
+
+    save_history_to_file(&g_history); //persiste el historial actualizado antes de terminar la shell
+
+    clear_history(&g_history);        //libera todos los nodos del historial almacenados en memoria
+
+    clear_JobTable(&g_job_table);     //libera los jobs que queden registrados antes de finalizar
+
+    executor_cleanup();               //libera recursos privados del executor, principalmente el cache de PATH
+
+    return 0;
 }
