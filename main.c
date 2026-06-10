@@ -54,10 +54,5 @@ free(line);
 
 }
 
-save_history_to_file(&g_history);
-clear_history(&g_history);
-clear_JobTable(&g_job_table);
-executor_cleanup();
-
 return 0;
 }
