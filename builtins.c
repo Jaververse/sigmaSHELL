@@ -49,6 +49,7 @@ static int builtin_cd(char **args) {
 static int builtin_jobs(void) {
     // LLamada a funcion en jobs.c
     builtin(&g_job_table); 
+    delete_DONE_jobs(&g_job_table);
     return 0;
 }
 

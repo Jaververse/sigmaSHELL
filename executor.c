@@ -41,9 +41,6 @@ while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (j->pgid == pid) {
             if (WIFEXITED(status) || WIFSIGNALED(status)) {
                 j->state = DONE;
-                //notificamos al usuario en la próxima línea del prompt
-                fprintf(stderr, "\n[%d] Terminado    %s\n",
-                    j->job_id, j->command);
                 }
                 break;
             }
@@ -183,6 +180,8 @@ pid_t pid = fork();
 }
 
     if (cmd->background) {
+        //ELIMINO Y MUESTRO
+        delete_DONE_and_Print(g_jobs);
     //background: registrar en jobs y devolver control
         char *cmd_str = CMD_string((NodeComando *)cmd);
         int job_id = add_job(g_jobs, pid, cmd_str ? cmd_str : cmd->args[0], RUNNING);
