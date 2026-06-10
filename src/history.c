@@ -1,0 +1,189 @@
+#include "history.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+void init_history(HistoryPersistent *historial){
+    historial->head = NULL;
+    historial->tail = NULL;
+    historial->cursor = NULL;
+    historial->memLines = 0;
+    historial->nextLine = 1;
+}
+
+//buil-int del historial
+void builtin_history(HistoryPersistent *historial){
+    if(historial == NULL || historial->head == NULL || historial->memLines == 0) return;
+
+    HistoryLine *current = historial->head;
+
+    while(current != NULL){
+
+        printf("%d  %s", current->pos, current->commandEditable);
+
+        //por si no tiene el salto de linea integrado
+        if (current->commandEditable[strlen(current->commandEditable) - 1] != '\n') {
+            printf("\n");
+        }
+        current = current->next;
+    }
+}
+
+
+//aniadir en el historial de memoria
+void add_to_history(HistoryPersistent *historial, const char *command){
+
+    if(historial == NULL || command == NULL) return;
+
+    //Comprobaciones para no guardar repetido ni guardar espacios en blanco
+    if (strcmp(command, "\n") == 0 || strlen(command) == 0) {
+        return; 
+    }
+
+    if (historial->tail != NULL) {
+        if (strcmp(historial->tail->command, command) == 0) {
+            return; 
+        }
+    }
+//inicializar los valores del nuevo valor al historial
+HistoryLine *newLine = (HistoryLine*) malloc(sizeof(HistoryLine));
+
+strncpy(newLine->command, command, MAX_CHAR_ON_LINE - 1);
+strncpy(newLine->commandEditable, command, MAX_CHAR_ON_LINE - 1);
+newLine->commandEditable[MAX_CHAR_ON_LINE - 1] = '\0';
+newLine->command[MAX_CHAR_ON_LINE - 1] = '\0';
+
+newLine->next = NULL;
+newLine->previous = NULL;
+newLine->pos = historial->nextLine;
+
+if(historial->memLines >= HISTSIZE){
+    HistoryLine *aux = historial->head;
+    historial->head = historial->head->next;
+    
+    if (historial->head != NULL)
+    {
+        historial->head->previous = NULL;
+    }
+    free(aux);
+    historial->memLines--;
+}
+
+if (historial->head == NULL)
+{
+    historial->head = newLine;
+    historial->tail = newLine;
+}
+else {
+    historial->tail->next = newLine;
+    newLine->previous = historial->tail;
+    historial->tail = newLine;
+}
+historial->memLines++;
+historial->nextLine++;
+historial->cursor = NULL;
+}
+
+
+
+void clear_history(HistoryPersistent *historial){
+
+    HistoryLine *current = historial->head;
+  
+    while(current != NULL){
+        HistoryLine *aux = current->next;
+        free(current);
+        current = aux;
+    }
+    historial->head = NULL;
+    historial->tail = NULL;
+    historial->memLines = 0;
+
+}
+
+//persistencia en disco
+
+//cargar al historial de memoria desde el archivo de disco
+void load_history_from_file(HistoryPersistent *historial){
+
+    if(historial == NULL) return;
+
+    FILE *fd = fopen(HISTORY_FILE, "r");
+    if(fd == NULL){
+        return;
+    }
+    
+    char buffer[MAX_CHAR_ON_LINE];
+    int lines = 0;
+
+    while (fgets(buffer, sizeof(buffer), fd)!= NULL && lines < HISTSIZE)
+    {
+        add_to_history(historial, buffer);
+        lines++;
+    }
+    fclose(fd);
+
+}
+
+
+//guardar al realizar exit el historial de memoria en disco
+void save_history_to_file(const HistoryPersistent *historial){
+
+    if(historial == NULL || historial->head == NULL) return;
+
+    FILE *fd = fopen(HISTORY_FILE, "w");
+    if(fd == NULL){
+        perror("Error al abrir el archivo");
+        return;
+    }
+
+    HistoryLine *current = historial->head;
+    int disklines = 0;
+
+    while(current != NULL && disklines < HISTFILESIZE){
+        fprintf(fd, "%s", current->command);
+         if (current->command[strlen(current->command) - 1] != '\n') {
+            fprintf(fd, "\n");
+        }
+        current = current->next;
+        disklines++;
+    }
+    fclose(fd);
+}
+
+//Para viajar en el historial a traves de las flechas arriba y abajo
+char* directional_arrows(HistoryPersistent *historial, char direction) {
+    if (historial == NULL || historial->head == NULL) {
+        return NULL; 
+    }
+    //la direccion hacia arriba se denota con el char A
+    if (direction == 'A') { 
+        if (historial->cursor == NULL) {
+       
+            historial->cursor = historial->tail;
+        } else if (historial->cursor->previous != NULL) {
+            
+            historial->cursor = historial->cursor->previous;
+        }
+       
+    } 
+    //hacia abajo es con B
+    else if (direction == 'B') { 
+        if (historial->cursor == NULL) {
+           
+            return NULL; 
+        } 
+        
+      
+        historial->cursor = historial->cursor->next; 
+    }
+
+    
+    if (historial->cursor != NULL) {
+        return historial->cursor->commandEditable;
+    }
+    
+    return NULL; 
+}
+
