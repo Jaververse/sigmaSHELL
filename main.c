@@ -34,21 +34,15 @@ int main(void)
 
         NodeComando *lista = Parser(line); //convierte la linea en una lista enlazada de comandos y operadores
 
-        if (lista != NULL) {      //solo se ejecuta si el parser produjo al menos un comando valido
-            executor_run(lista);  //ejecuta comandos simples, pipelines, redirecciones, &&, ||, ; y background simple
-            liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
+        if (lista != NULL) { 
+        //solo se ejecuta si el parser produjo al menos un comando valido
+        if(validarsyntax(lista)==0){
+        executor_run(lista);  //ejecuta comandos simples, pipelines, redirecciones, &&, ||, ; y background simple
+        liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
         }
-
+        }
         free(line); // libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
     }
-
-    save_history_to_file(&g_history); //persiste el historial actualizado antes de terminar la shell
-
-    clear_history(&g_history);        //libera todos los nodos del historial almacenados en memoria
-
-    clear_JobTable(&g_job_table);     //libera los jobs que queden registrados antes de finalizar
-
-    executor_cleanup();               //libera recursos privados del executor, principalmente el cache de PATH
 
     return 0;
 }

@@ -40,6 +40,7 @@ void builtin(JobTable *table);
 void clear_JobTable(JobTable* table);
 int delete_DONE_jobs(JobTable *table);
 void delete_DONE_and_Print(JobTable *tabla);
+void builtinPID(JobTable *table);
 
 
 #endif

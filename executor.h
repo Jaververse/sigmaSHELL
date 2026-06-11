@@ -11,6 +11,7 @@ void executor_init(JobTable *table);                  // inicializa el modulo ex
 void executor_cleanup(void);                          // libera recursos privados del executor antes de cerrar la shell.
 int executor_find_binary(const char *name, char *out_path); // busca un ejecutable por ruta explicita o dentro de PATH.
 int executor_run(NodeComando *head);                  //ejecuta la lista enlazada de comandos respetando operadores del parser.
+int validarsyntax(NodeComando *head);
 
 #endif // EXECUTOR_H
 

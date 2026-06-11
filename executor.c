@@ -1,7 +1,6 @@
 #include "executor.h"
 #include "builtins.h"
 #include "jobs.h"     
-
 #include <unistd.h>  
 #include <sys/types.h> 
 #include <sys/wait.h> 
@@ -20,6 +19,19 @@ static int   path_dirs_count = 0;
 //puntero a la tabla de jobs global, se recibe en executor_init()
 static JobTable *g_jobs = NULL;
 
+//validar
+int validarsyntax(NodeComando *head) {
+    NodeComando *cur = head;
+    while (cur != NULL) {
+        // Si el comando actual tiene background, el siguiente operador NO puede ser un pipe
+        if (cur->background && cur->next_op == OP_PIPE) {
+            fprintf(stderr, "ucvsh: error sintáctico cerca del elemento inesperado `|'\n");
+            return -1;
+        }
+        cur = cur->next;
+    }
+    return 0;
+}
 //rutas estandar de Linux usadas si $PATH no está definida
 static const char *FALLBACK_PATHS[] = {
     "/bin", "/usr/bin", "/sbin", "/usr/sbin", "/usr/local/bin", NULL
@@ -152,9 +164,48 @@ static int apply_redirections(const NodeComando *cmd)
     }
     return 0;
 }
+
+
 static int run_single_command(const NodeComando *cmd)
 {
     if (!cmd || cmd->argc == 0 || !cmd->args[0]) return -1;
+
+    //exec bloque
+    if (strcmp(cmd->args[0], "exec") == 0) {
+
+        // Si solo se escribió "exec" sin argumentos, no hace nada
+        if (cmd->argc < 2) return 0; 
+
+        // Buscar el binario del argumento que está DESPUÉS de "exec"
+        char binary_path[MAX_BINARY_PATH];
+        if (executor_find_binary(cmd->args[1], binary_path) != 0) {
+            fprintf(stderr, "ucvsh: %s: comando no encontrado\n", cmd->args[1]);
+            return 127;
+        }
+
+        // Aplicar las redirecciones directamente al proceso padre (tu shell)
+        if (apply_redirections(cmd) != 0) return 1;
+
+        // Ejecutar el nuevo programa pasándole los argumentos desde el índice 1
+        // ¡Aquí la shell desaparece y es reemplazada!
+        execv(binary_path, &cmd->args[1]);
+
+        // Si execv() retorna, es porque hubo un error fatal
+        perror("ucvsh: exec");
+        return 127; 
+    }
+    
+    //jobsp bloque
+    if(strcmp(cmd->args[0],"jobsp")== 0) {
+     fprintf(stderr, "ucvsh: %s: comando no encontrado\n", cmd->args[0]);
+     return 127;
+    }
+    if (strcmp(cmd->args[0], "jobs") == 0 && cmd->argc > 1 && cmd->args[1] != NULL && strcmp(cmd->args[1], "-p") == 0) {
+        // Cambiamos temporalmente el nombre del argumento 0 para que run_builtin sepa qué hacer
+        free(cmd->args[0]);
+        cmd->args[0] = strdup("jobsp");
+    }
+
     //1. verificar si es built-in
     if (is_builtin(cmd->args[0])) {
         return run_builtin((NodeComando *)cmd);
@@ -202,171 +253,204 @@ pid_t pid = fork();
         return -1;
     }
 }
-//run_pipeline() Pipeline dinámica
+
+
 static int run_pipeline(NodeComando *first)
 {
-//contar nodos
-int n = 0;
-NodeComando *cur = first;
-while (cur != NULL) {
-    n++;
-    if (cur->next_op == OP_PIPE) {
-        cur = cur->next;
-    } else {
-        break;
-        }
+    if (!first) return -1;
+
+    // 1. Contar cuántos comandos componen el pipeline
+    int n = 0;
+    NodeComando *cur = first;
+    while (cur != NULL) {
+        n++;
+        if (cur->next_op == OP_PIPE) cur = cur->next;
+        else break;
     }
 
-//si solo hay un nodo, no hay pipes: ejecutar como comando simple
+    // Si solo hay un nodo, delegar inmediatamente a comando simple
     if (n == 1) return run_single_command(first);
 
     int num_pipes = n - 1;
 
-//alojar los tres arreglos dinámicamente con malloc.
-    NodeComando **nodes = malloc(n * sizeof(NodeComando *));
-    if (!nodes) {
-        perror("run_pipeline: malloc nodes");
-        return -1;
-    }
-int *pipe_fds = malloc(num_pipes * 2 * sizeof(int));
-    if (!pipe_fds) {
-        perror("run_pipeline: malloc pipe_fds");
-        free(nodes);
-        return -1;
-    }
+    // Alojamos solo los arreglos estrictamente necesarios
+    int *pipe_fds = malloc(num_pipes * 2 * sizeof(int));
     pid_t *child_pids = malloc(n * sizeof(pid_t));
-    if (!child_pids) {
-        perror("run_pipeline: malloc child_pids");
-        free(pipe_fds);
-        free(nodes);
+    if (!pipe_fds || !child_pids) {
+        perror("run_pipeline: malloc");
+        free(pipe_fds); free(child_pids);
         return -1;
     }
-//rellenar nodes[] recorriendo la lista de nuevo
+
+    // 2. Inicializar y crear todos los pipes
+    for (int i = 0; i < num_pipes; i++) {
+        if (pipe(pipe_fds + i * 2) == -1) {
+            perror("ucvsh: pipe");
+            for (int j = 0; j < i * 2; j++) close(pipe_fds[j]);
+            free(pipe_fds); free(child_pids);
+            return -1;
+        }
+    }
+
+    // 3. Crear los procesos hijos recorriendo la lista enlazada
     cur = first;
+    int is_background = 0;
+
     for (int i = 0; i < n; i++) {
-        nodes[i] = cur;
-        if (cur->next_op == OP_PIPE) cur = cur->next;
-    }
-
-//inicializar e crear todos los pipes ANTES del primer fork
-for (int i = 0; i < num_pipes; i++) {
-    pipe_fds[i*2+0] = -1;
-    pipe_fds[i*2+1] = -1;
-    }
-for (int i = 0; i < num_pipes; i++) {
-    int fds[2];
-    if (pipe(fds) == -1) {
-        perror("pipe");
-        //cerrar los pipes ya creados antes de abortar
-        for (int j = 0; j < i; j++) {
-            close(pipe_fds[j*2+0]);
-            close(pipe_fds[j*2+1]);
-        }
-        free(child_pids);
-        free(pipe_fds);
-        free(nodes);
-        return -1;
-        }
-        pipe_fds[i*2+0] = fds[0];
-        pipe_fds[i*2+1] = fds[1];
-    }
-    //crear un proceso hijo por cada comando de la pipeline.
-    for (int i = 0; i < n; i++) {
-        NodeComando *cmd = nodes[i];
-
-    //Buscar el binario de este segmento en $PATH
-    char bin[MAX_BINARY_PATH];
-    if (executor_find_binary(cmd->args[0], bin) != 0) {
-        fprintf(stderr, "ucvsh: %s: comando no encontrado\n", cmd->args[0]);
-        for (int k = 0; k < num_pipes; k++) {
-            close(pipe_fds[k*2+0]);
-            close(pipe_fds[k*2+1]);
-        }
-        free(child_pids);
-        free(pipe_fds);
-        free(nodes);
-        return 127;
-    }
-
-    pid_t pid = fork();
-    if (pid == -1) {
-        perror("fork pipeline");
-        for (int k = 0; k < num_pipes; k++) {
-            close(pipe_fds[k*2+0]);
-            close(pipe_fds[k*2+1]);
-        }
-        free(child_pids);
-        free(pipe_fds);
-        free(nodes);
-        return -1;
-    }
-    if (pid == 0) {
-        //proceso hijo i
-        signal(SIGCHLD, SIG_DFL);
-
-    //conectar stdin al extremo de lectura del pipe anterior
-    //Solo para los comandos que no son el primero (i > 0)
-    if (i > 0) {
-        if (dup2(pipe_fds[(i-1)*2+0], STDIN_FILENO) == -1) {
-            perror("dup2 stdin pipe"); exit(1);
-            }
-        }
-
-        //conectar stdout al extremo de escritura del pipe siguiente
-        //solo para los comandos que no son el último (i < n-1)
-        if (i < n - 1) {
-            if (dup2(pipe_fds[i*2+1], STDOUT_FILENO) == -1) {
-                perror("dup2 stdout pipe"); exit(1);
-            }
-        }
-        //CRÍTICO: cerrar TODOS los extremos de TODOS los pipes
-        for (int k = 0; k < num_pipes; k++) {
-            close(pipe_fds[k*2+0]);
-            close(pipe_fds[k*2+1]);
-        }
-        //liberar memoria dinámica antes de execv
-        free(child_pids);
-        free(pipe_fds);
-        free(nodes);
-
-        //aplicar redirecciones de archivo si las hay
-            if (apply_redirections(cmd) != 0) exit(1);
-
-            execv(bin, cmd->args);
-            perror(bin);
-            exit(127);
-    }
-    //PADRE: registrar PID del hijo y cerrar los extremos del pipe anterior que ya no necesita
-        child_pids[i] = pid;
-        if (i > 0) {
-            close(pipe_fds[(i-1)*2+0]);
-            close(pipe_fds[(i-1)*2+1]);
-        }
-    }
-    //cerrar el último pipe que quedó pendiente tras el bucle
-    if (num_pipes > 0) {
-        close(pipe_fds[(num_pipes-1)*2+0]);
-        close(pipe_fds[(num_pipes-1)*2+1]);
-    }
-    //esperar a TODOS los hijos de la pipeline.
-    int last_exit = 0;
-    for (int i = 0; i < n; i++) {
-        int status;
-        waitpid(child_pids[i], &status, 0);
+        // El estado de background lo determina el último comando de la tubería
         if (i == n - 1) {
-            if (WIFEXITED(status))        last_exit = WEXITSTATUS(status);
-            else if (WIFSIGNALED(status)) last_exit = 128 + WTERMSIG(status);
+            is_background = cur->background;
         }
+
+        // Mapeo preventivo de jobs -p tal como lo hace tu run_single_command
+        if (strcmp(cur->args[0], "jobs") == 0 && cur->argc > 1 && cur->args[1] != NULL && strcmp(cur->args[1], "-p") == 0) {
+            free(cur->args[0]);
+            cur->args[0] = strdup("jobsp");
+        }
+
+        pid_t pid = fork();
+        if (pid == -1) {
+            perror("ucvsh: fork pipeline");
+            for (int k = 0; k < num_pipes * 2; k++) close(pipe_fds[k]);
+            free(pipe_fds); free(child_pids);
+            return -1;
+        }
+
+        if (pid == 0) {
+            // =========================================================
+            //                     CÓDIGO DEL HIJO
+            // =========================================================
+            signal(SIGCHLD, SIG_DFL);
+
+            // Redirección interna de los Pipes
+            if (i > 0) {
+                dup2(pipe_fds[(i - 1) * 2 + 0], STDIN_FILENO);
+            }
+            if (i < n - 1) {
+                dup2(pipe_fds[i * 2 + 1], STDOUT_FILENO);
+            }
+
+            // Cerrar TODOS los extremos de copia en el hijo
+            for (int k = 0; k < num_pipes * 2; k++) {
+                close(pipe_fds[k]);
+            }
+
+            // Liberar memoria dinámica local en el hijo antes del exec
+            free(pipe_fds);
+            free(child_pids);
+
+            // Aplicar redirecciones de archivos avanzadas (<, >, >>)
+            if (apply_redirections(cur) != 0) exit(1);
+
+            // Control de Built-ins en subshell
+            if (is_builtin(cur->args[0])) {
+                int ret = run_builtin(cur);
+                exit(ret);
+            }
+
+            // Control del bloque EXEC
+            if (strcmp(cur->args[0], "exec") == 0) {
+                if (cur->argc < 2) exit(0);
+                char binary_path[MAX_BINARY_PATH];
+                if (executor_find_binary(cur->args[1], binary_path) != 0) {
+                    fprintf(stderr, "ucvsh: %s: comando no encontrado\n", cur->args[1]);
+                    exit(127);
+                }
+                execv(binary_path, &cur->args[1]);
+                perror("ucvsh: exec");
+                exit(127);
+            }
+
+            if (strcmp(cur->args[0], "jobsp") == 0) {
+                fprintf(stderr, "ucvsh: %s: comando no encontrado\n", cur->args[0]);
+                exit(127);
+            }
+
+            // Ejecución de comandos externos estándar (Búsqueda segura en el hijo)
+            char binary_path[MAX_BINARY_PATH];
+            if (executor_find_binary(cur->args[0], binary_path) != 0) {
+                fprintf(stderr, "ucvsh: %s: comando no encontrado\n", cur->args[0]);
+                exit(127);
+            }
+
+            execv(binary_path, cur->args);
+            perror(binary_path);
+            exit(127);
+        }
+
+        // PADRE: Registra el PID y avanza en la lista enlazada
+        child_pids[i] = pid;
+        cur = cur->next;
     }
 
-    //liberar memoria dinámica antes de retornar
-    free(child_pids);
+    // 4. El padre cierra todos sus descriptores de pipes abiertos de una sola vez
+    for (int k = 0; k < num_pipes * 2; k++) {
+        close(pipe_fds[k]);
+    }
+
+    int last_exit = 0;
+
+    // 5. MANEJO DE ESPERA (BACKGROUND VS FOREGROUND)
+    if (is_background) {
+        // Lógica idéntica a tu run_single_command para registrar el Job de fondo
+        delete_DONE_and_Print(g_jobs);
+
+        char full_cmd[1024] = {0}; 
+        NodeComando *tmp = first;
+       while (tmp != NULL) {
+        // Concatenar todos los argumentos del comando actual
+        for (int i = 0; i < tmp->argc; i++) {
+            strcat(full_cmd, tmp->args[i]);
+            
+            // Agregar espacio entre argumentos, pero no al final del comando
+            if (i < tmp->argc - 1) {
+                strcat(full_cmd, " ");
+            }
+        }
+
+        // Si hay un pipe, agregar el separador y continuar al siguiente nodo
+        if (tmp->next_op == OP_PIPE) {
+            strcat(full_cmd, " | ");
+            tmp = tmp->next;
+        } else {
+            break; // Salir si no hay más pipes
+        }
+    }
+ // agregar
+        int job_id = add_job(g_jobs, child_pids[0], full_cmd, RUNNING);
+
+
+        fprintf(stderr, "[%d] %d\n", job_id, child_pids[0]);
+        last_exit = 0;
+    } else {
+        // Foreground: Esperar de forma ordenada a todos los hijos secuencialmente
+      for (int i = 0; i < n; i++) {
+    int status;
+    if (waitpid(child_pids[i], &status, 0) == -1) {
+        // Si el error es ECHILD, significa que el proceso ya fue recolectado por el handler
+        if (errno == ECHILD) {
+            // No hacemos nada, solo continuamos al siguiente hijo
+        } else {
+            // Si es otro error (ej. EINTR), reportamos
+            perror("waitpid");
+        }
+        continue; // SALTAMOS al siguiente hijo porque este no se pudo esperar
+    }
+    
+    // Capturar la salida únicamente del último eslabón
+    if (i == n - 1) {
+        if (WIFEXITED(status))        last_exit = WEXITSTATUS(status);
+        else if (WIFSIGNALED(status)) last_exit = 128 + WTERMSIG(status);
+    }
+}
+    }
+
+    // Liberación de memoria local en el proceso padre
     free(pipe_fds);
-    free(nodes);
+    free(child_pids);
 
     return last_exit;
 }
-
 
 int executor_run(NodeComando *head)
 {

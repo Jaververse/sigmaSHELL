@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "jobs.h"
 #include "history.h"
+#include "executor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,6 +71,7 @@ static int builtin_exit(void) {
 
     clear_history(&g_history); // Limpiamos el historial en memoria. (funcion en history.c)
     clear_JobTable(&g_job_table); // limpiamos el job table en memoria. (funcion en jobs.c)
+    executor_cleanup();  //libera recursos privados del executor, principalmente el cache de PATH
     
 
     exit(0); // Salimos
@@ -195,6 +197,12 @@ static int builtin_historyR(void) {
     return 0;
 }
 
+static int builtin_jobsp(void)
+{
+    builtinPID(&g_job_table);
+    return 0;
+}
+
 
 int is_builtin(const char *comando) {
     if (comando == NULL) {
@@ -221,6 +229,9 @@ int is_builtin(const char *comando) {
     else if (strcmp(comando,"history") == 0) {
     return 1;
     }
+    else if (strcmp(comando,"jobsp") == 0) {
+    return 1;
+    }
     return 0; //Es un comando externo 
 }
 
@@ -236,6 +247,10 @@ int run_builtin(NodeComando *comando) {
     if (strcmp(comando->args[0], "jobs") == 0) 
     {
     return builtin_jobs();
+    }
+    if (strcmp(comando->args[0],"jobsp") == 0)
+    {
+    return builtin_jobsp();
     }
     if (strcmp(comando->args[0], "exit") == 0) 
     {
