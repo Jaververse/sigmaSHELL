@@ -68,14 +68,7 @@ static int builtin_exit(void) {
 
     save_index_to_file(&g_history);
     save_history_to_file(&g_history); // Utilizamos la funcion en history.c para guardar el historial en un archivo.
-
-    clear_history(&g_history); // Limpiamos el historial en memoria. (funcion en history.c)
-    clear_JobTable(&g_job_table); // limpiamos el job table en memoria. (funcion en jobs.c)
-    executor_cleanup();  //libera recursos privados del executor, principalmente el cache de PATH
-    
-
-    exit(0); // Salimos
-    return 0;
+    return -42; // devolvemos este (-42) que le da la orden al main de terminar y liberar.
 }
 
 //Traemos al frente un proceso de segundo plano.

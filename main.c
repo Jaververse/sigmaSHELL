@@ -36,14 +36,25 @@ int main(void)
 
         if (lista != NULL) { 
         //solo se ejecuta si el parser produjo al menos un comando valido
-        if(validarsyntax(lista)==0){
-        executor_run(lista);  //ejecuta comandos simples, pipelines, redirecciones, &&, ||, ; y background simple
-        
-        }
-        liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
-        }
-        free(line); // libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
+            if(validarsyntax(lista)==0){
+            int status= executor_run(lista);  //ejecuta comandos simples, pipelines, redirecciones, &&, ||, ; y background simple
+            liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
+            free(line);// libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
+            if(status==-42) break; // Solicito un exit el usuario.
+            }
+            else{ // Error de sintaxis , liberamos igual.
+            liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
+            free(line);// libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
+            }
+        } 
+        else{ // si la lista es NULL, no se genero nada.
+            free(line); // libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
+            }
     }
 
+    //LIMPIEZA GLOBAL COMPLETA
+    clear_history(&g_history); // Limpiamos el historial en memoria. (funcion en history.c)
+    clear_JobTable(&g_job_table); // limpiamos el job table en memoria. (funcion en jobs.c)
+    executor_cleanup();  //libera recursos privados del executor, principalmente el cache de PATH
     return 0;
 }
