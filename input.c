@@ -60,11 +60,19 @@ char* read_line(HistoryPersistent *historial){
             getchar(); 
             int letra_flecha = getchar(); 
 
+                 //la letra C representa derecha, y la letra C es la secuencia para Izquierda
+            if(letra_flecha == 'C' || letra_flecha == 'D'){
+                fflush(stdout);
+                continue;
+            }
+
             if (historial->cursor != NULL) {
 
             strncpy(historial->cursor->commandEditable, buffer, MAX_CHAR_ON_LINE - 1);
             historial->cursor->commandEditable[MAX_CHAR_ON_LINE - 1] = '\0';
             }
+
+
 
             char *cmd_historial = directional_arrows(historial, letra_flecha); //Para ver que flecha se presiono y obtener el comando de es pos a la que se movio 
 
