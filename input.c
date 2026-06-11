@@ -60,6 +60,12 @@ char* read_line(HistoryPersistent *historial){
             getchar(); 
             int letra_flecha = getchar(); 
 
+                //la letra C representa derecha, y la letra C es la secuencia para Izquierda
+         if(letra_flecha == 'C' || letra_flecha == 'D'){
+            fflush(stdout);
+            continue;
+         }
+
             if (historial->cursor != NULL) {
 
             strncpy(historial->cursor->commandEditable, buffer, MAX_CHAR_ON_LINE - 1);

@@ -5,8 +5,6 @@
 #include <errno.h>
 
 
-
-
 //inicializar y quitar basura de cada campo
 void init_history(HistoryPersistent *historial){
     historial->head = NULL;
@@ -230,12 +228,6 @@ char* directional_arrows(HistoryPersistent *historial, char direction) {
         historial->cursor = historial->cursor->next; 
     }
 
-        //la letra C representa derecha, y la letra C es la secuencia para Izquierda
-    else if(direction == 'C' || direction == 'D'){
-       //no se hace nada pq por defecto lo borra
-    }
-
-    
     if (historial->cursor != NULL) {
         return historial->cursor->commandEditable; //valor esperado a retornar
     }

@@ -2,7 +2,7 @@
 #define HISTORY_H
 
 #define HISTFILESIZE 2000 //valor maximo que se puede almacenar en mem
-#define HISTSIZE 2000  // "" "" "" en disco 
+#define HISTSIZE 2000 // "" "" "" en disco 
 #define MAX_CHAR_ON_LINE 256 
 #define HISTORY_FILE ".ucvsh_history" //archivo del historial
 #define HISTORYINDEX_FILE ".ucvsh_index" //archivo que almacena el index del head
