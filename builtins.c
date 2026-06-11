@@ -108,7 +108,7 @@ static int builtin_fg(char **args) {
     return 1;
     }
     if (job->state == DONE) { // SI el estado nos indica que el proceso ya termino.
-    fprintf(stderr, "ucvsh: fg: [%d] ya terminó\n", job->job_id);
+    fprintf(stderr, "ucvsh: fg: [%d] Done\n", job->job_id);
     return 1;
     }
 
@@ -170,11 +170,11 @@ static int builtin_bg(char **args) {
     return 1;
     }
     if (job->state == DONE) { // Termino
-    fprintf(stderr, "ucvsh: bg: [%d] ya terminó\n", job->job_id);
+    fprintf(stderr, "ucvsh: bg: [%d] Done\n", job->job_id);
     return 1;
     }
     if (job->state == RUNNING) { // Ya corriendo.
-    fprintf(stderr, "ucvsh: bg: [%d] ya está corriendo en segundo plano\n", job->job_id);
+    fprintf(stderr, "ucvsh: bg: [%d] ya esta corriendo en segundo plano\n", job->job_id);
     return 0; 
     }
 
