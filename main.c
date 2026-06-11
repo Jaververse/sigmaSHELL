@@ -38,8 +38,9 @@ int main(void)
         //solo se ejecuta si el parser produjo al menos un comando valido
         if(validarsyntax(lista)==0){
         executor_run(lista);  //ejecuta comandos simples, pipelines, redirecciones, &&, ||, ; y background simple
-        liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
+        
         }
+        liberarListaCMD(lista); //libera todos los nodos, argumentos y archivos creados dinamicamente por el parser
         }
         free(line); // libera la linea devuelta por read_line(), porque esa funcion reserva memoria dinamica
     }
