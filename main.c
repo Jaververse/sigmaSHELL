@@ -1,13 +1,12 @@
-#include "parser.h"        //expone NodeComando, Parser() y liberarListaCMD() para convertir una linea en comandos ejecutables
-#include "executor.h"      //expone executor_init(), executor_run() y executor_cleanup() para ejecutar la lista parseada
-#include "jobs.h"          //expone JobTable y funciones de administracion de trabajos en segundo plano
-#include "history.h"       //expone HistoryPersistent y funciones para cargar, guardar y limpiar el historial
-#include "input.h"         //expone read_line(), que lee una linea interactiva usando el historial
-#include "builtins.h"      //se incluye para mantener visible el modulo de built-ins dentro del programa principal
-#include "signKeyboard.h"  //expone init_signals(), dejando la logica de senales fuera de main.c
-
-#include <stdio.h>          //biblioteca estandar de entrada/salida usada indirectamente por el flujo principal
-#include <stdlib.h>         //biblioteca estandar para free() y utilidades generales.
+#include "parser.h"    
+#include "executor.h"   
+#include "jobs.h"     
+#include "history.h"   
+#include "input.h"       
+#include "builtins.h"    
+#include "signKeyboard.h"  
+#include <stdio.h>         
+#include <stdlib.h>       
 
 JobTable g_job_table;             //tabla global de jobs para que executor.c y builtins.c compartan el mismo estado
 HistoryPersistent g_history;      //historial global para que input.c, history.c y builtins.c trabajen sobre la misma lista
