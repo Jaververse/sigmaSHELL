@@ -118,8 +118,9 @@ static int builtin_fg(char **args) {
     
     int estado; // variable de estado
     waitpid(job->pgid, &estado, WUNTRACED);  // Esperamos que termine o se suspenda.
-
-    if (WIFSTOPPED(estado)) { // Si se suspendio.
+    printf("\n"); 
+    fflush(stdout);
+    if (WIFSTOPPED(estado)) { // Si se suspendio. faltaria la señal 
     job->state = SUSPENDED; // Cambiamos el estado.
     printf("\n[%d] Suspendido  %s\n", job->job_id, job->command); // informamos al usuario.
     return 0;
