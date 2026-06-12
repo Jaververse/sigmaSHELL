@@ -24,8 +24,7 @@ DEPS := $(OBJS:.o=.d)
 
 all: $(TARGET)
 
-	@echo "  ucvsh compilado correctamente."
-	@echo "  Ejecutar con: ./ucvsh"
+	
 
 
 #enlaza todos los objetos del proyecto completo en un unico ejecutable
