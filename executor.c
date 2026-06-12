@@ -305,15 +305,28 @@ if (strcmp(cmd->args[0], "exec") == 0) {
         return 127;
     }
 
+    //Mascara evitar condiciones de carrera antes del fork.
+
+    sigset_t mask, prev_mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+    
+    // bloqueamos SIGCHLD temporalmente
+    sigprocmask(SIG_BLOCK, &mask, &prev_mask);
+
 //llamada al sistema para crear un nuevo proceso (hijo) duplicando el proceso de la shell (padre)
 pid_t pid = fork();
     
 //si la creacion del proceso falla por recursos insuficientes, avisa y aborta
-if (pid == -1) { perror("fork"); return -1; }
+if (pid == -1) { 
+    perror("fork");
+    sigprocmask(SIG_SETMASK, &prev_mask, NULL); // Por si falla , restauramos igual.
+    return -1; 
+}
 
 //bloque de codigo que SOLO se ejecutara en el contexto del proceso HIJO (donde fork devuelve 0)
     if (pid == 0) {
-
+   sigprocmask(SIG_SETMASK, &prev_mask, NULL); // restauramos la mascara.
 //restaura el comportamiento predeterminado del sistema para la senial SIGCHLD dentro del proceso hijo
     signal(SIGCHLD, SIG_DFL);
 
@@ -339,21 +352,27 @@ if (pid == -1) { perror("fork"); return -1; }
     free(cmd_str);
 //imprime en la consola el Job ID asignado y el PID del sistema operativo en formato estandar "[ID] PID"
     fprintf(stderr, "[%d] %d\n", job_id, pid);
+    sigprocmask(SIG_SETMASK, &prev_mask, NULL);
 //retorna control inmediato a la shell sin bloquearla, regresando estado de salida 0
     return 0;
 } else {
 //si no es background (foreground): la shell debe detenerse hasta que este proceso hijo culmine
     int status;
+    int exit_val = -1; //Variable para guardar nuestra salida.
 //llamada bloqueante a waitpid indicando que el padre esperara especificamente a que muera el 'pid' recién creado
     if (waitpid(pid, &status, 0) == -1) {
 //si la espera falla (ejm. por interrupcion), avisa y retorna error de ejecucion
-    perror("waitpid"); return -1;
+    perror("waitpid"); 
+    exit_val = -1;
     }
+    else{
 //evalua a traves de macros si el hijo termino de forma voluntaria usando exit() o return en main
-    if (WIFEXITED(status))   return WEXITSTATUS(status);//extrae y retorna el valor de salida (0-255)
+        if (WIFEXITED(status))   exit_val = WEXITSTATUS(status);//extrae y retorna el valor de salida (0-255)
 //evalua si el proceso fue terminado bruscamente por una senial externa (como un Segfault)
-    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);//retorna codigo estándar UNIX (128 + numero de la señal fatal)
-    return -1;
+        if (WIFSIGNALED(status)) exit_val = 128 + WTERMSIG(status);//retorna codigo estándar UNIX (128 + numero de la señal fatal)
+    }
+    sigprocmask(SIG_SETMASK, &prev_mask, NULL); // restauramos el manejador.
+    return exit_val;
     }
 }
 
@@ -414,6 +433,14 @@ cur = first;
 //variable bandera que determinara si toda la linea de tuberias correra en segundo plano (background)
 int is_background = 0;
 
+// Mascara para seniales, evitando problemas con el manejador
+    sigset_t mask, prev_mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+
+// Bloqueamos SIGCHLD antes de crear los hijos
+  sigprocmask(SIG_BLOCK, &mask, &prev_mask);
+
 //bucle que iterara n veces para realizar los "forks" creando simultaneamente a todos los actores del pipeline
 for (int i = 0; i < n; i++) {
 //la convencion de bash establece que el caracter '&' al final del ultimo comando dicta el background de todo el pipeline
@@ -440,6 +467,8 @@ for (int i = 0; i < n; i++) {
 
 //logica del proceso hijo clonado
     if (pid == 0) {
+
+        sigprocmask(SIG_SETMASK, &prev_mask, NULL); //desbloqueamos la senial para el hijo
 //desvincula el proceso hijo del manejador de seniales zombi del padre para evitar bucles    
         signal(SIGCHLD, SIG_DFL);
 
@@ -558,6 +587,8 @@ for (int i = 0; i < n; i++) {
         fprintf(stderr, "[%d] %d\n", job_id, child_pids[0]);
 //define el estado exitoso porque la ejecucion asincrona no reporta un error
         last_exit = 0;
+
+        sigprocmask(SIG_SETMASK, &prev_mask, NULL); // desbloqueamos para el padre background.
     } else {
 //ejecucion foreground, la shell debe congelarse esperando a que finalicen secuencialmente cada uno de los eslabones creados
       for (int i = 0; i < n; i++) {
@@ -582,6 +613,8 @@ for (int i = 0; i < n; i++) {
         else if (WIFSIGNALED(status)) last_exit = 128 + WTERMSIG(status);
     }
 }
+  // Si un background murió mientras esperábamos, el handler se ejecutará en este exacto instante
+   sigprocmask(SIG_SETMASK, &prev_mask, NULL);
     }
 
 //libera de la memoria ram del padre los arreglos de seguimiento de PIPES
